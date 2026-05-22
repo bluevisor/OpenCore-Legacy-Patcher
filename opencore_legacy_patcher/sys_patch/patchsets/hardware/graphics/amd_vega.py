@@ -6,6 +6,7 @@ from ..base import BaseHardware, HardwareVariant, HardwareVariantGraphicsSubclas
 
 from ...base import PatchType
 
+from ...shared_patches.renderbox       import RenderBox
 from ...shared_patches.monterey_gva    import MontereyGVA
 from ...shared_patches.monterey_opencl import MontereyOpenCL
 from ...shared_patches.amd_opencl      import AMDOpenCL
@@ -80,7 +81,7 @@ class AMDVega(BaseHardware):
 
                         "AMDRadeonVADriver2.bundle":      "12.5",
                         "AMDRadeonX5000GLDriver.bundle":  "12.5",
-                        "AMDRadeonX5000MTLDriver.bundle": "12.5" if self._xnu_major < os_data.sequoia else "12.5-24",
+                        **({ "AMDRadeonX5000MTLDriver.bundle": f"12.5-{self._xnu_major}" }),
                         "AMDRadeonX5000Shared.bundle":    "12.5",
 
                         "AMDShared.bundle":               "12.5",
@@ -121,12 +122,19 @@ class AMDVega(BaseHardware):
         if self.native_os() is True:
             return {}
 
-        return {
+        _base = {
             # AMD GCN and newer GPUs can still use the native GVA stack
             **MontereyGVA(self._xnu_major, self._xnu_minor, self._constants.detected_os_version).revert_patches(),
-
+            
             **MontereyOpenCL(self._xnu_major, self._xnu_minor, self._constants.detected_os_version).patches(),
             **AMDOpenCL(self._xnu_major, self._xnu_minor, self._constants.detected_os_version).patches(),
             **self._model_specific_patches(),
             **self._model_specific_patches_extended(),
         }
+
+        if self._xnu_major >= os_data.tahoe.value:
+            _base.update({
+                **RenderBox(self._xnu_major, self._xnu_minor, self._constants.detected_os_version).patches(),
+            })
+
+        return _base
